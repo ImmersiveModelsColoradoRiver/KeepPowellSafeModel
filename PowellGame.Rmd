@@ -1,12 +1,12 @@
 ---
 title: "Can You Keep Lake Powell Safe?"
-author: "Isabel Hinton"
-date: "2026-10-14"
+author: "Isabel Hinton, David Rosenberg, Brittany Fager, Anabelle Meyers, Caitlyn Andrus, Erik Porse, Michael Jaquez"
+date: "2026-11-17"
 output: html_document
 runtime: shiny
 resource_files:
 - www/LowestInflowFigure.png
-- "www/clipboard-image-2026-09-04.png"
+- www/clipboard-image-2026-09-04.png
 ---
 ```{r setup, echo=FALSE, message = FALSE, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -141,7 +141,7 @@ projection <- reactive({
       ytd_release <- sum(submitted()$release)
       ytd_inflow <- sum(result_filtered$inflow) / 1000000
       
-       end_description<-
+       end_description_won<-
         HTML(
           paste0("Congratulations! You've reached the end of the water year and the game! <br/>",
             "The Current Date is: ", format(current_date(), "%B %d"),
@@ -155,10 +155,25 @@ projection <- reactive({
              )
         )
        
+       end_description_lost<-
+          HTML(
+          paste0("It's the end of the water year and Lake Powell has dropped below minimum power pool!<br/>",
+            "The Current Date is: ", format(current_date(), "%B %d"),
+             "<br/>The storage of Lake Powell at the end of the water year is: ", round(current_storage, digits = 1), " MAF",
+             "<br/>The elevation of Lake Powell at the end of the water year is: ", current_elevation, " ft.",
+            "<br/>The Current Storage of Lake Powell above the protection elevation is ", round(current_storage - 4.215805, digits = 2), " MAF",
+             "<br/><br/>The total water released from Lake Powell this water year was: ",
+            round(ytd_release, digits = 2), " MAF",
+            "<br/>The total inflow to Lake Powell this water year was: ",
+            round(ytd_inflow, digits = 2), " MAF"
+             )
+        )
+     
+    if (any(result$elevation <= 3490, na.rm = TRUE)) {
       showModal(
         modalDialog(
-          title = "Congratulations!", 
-          end_description,
+          title = "You Lost!", 
+          end_description_lost,
           plotOutput("final_projection_plot"),
           div(
             style = "width: 100%; overflow-x: auto;", #Allows for scrolling on table in modal
@@ -168,6 +183,23 @@ projection <- reactive({
           footer = actionButton("restart_button", "Try Again")
         )
       )
+      }
+    
+    else  {
+      showModal(
+        modalDialog(
+          title = "Congratulations!", 
+          end_description_won,
+          plotOutput("final_projection_plot"),
+          div(
+            style = "width: 100%; overflow-x: auto;", #Allows for scrolling on table in modal
+            tableOutput("past_decisions_modal")
+            ),
+          easyClose = FALSE,
+          footer = actionButton("restart_button", "Try Again")
+        )
+      )
+    }
   } 
   # Checks if Powell hits minimum power pool
   else if (any(result$elevation <= 3490, na.rm = TRUE)) {
@@ -293,7 +325,7 @@ observeEvent(input$start_game_bottom,{
       
       #Renders Text
       HTML(paste0(
-          "<b>Current Storage: </b>", round(current_storage, digits = 1) , " MAF<br/>",
+          "<b>Current Storage: </b>", round(current_storage, digits = 1) , " MAF (", round(current_storage - 4.2, digits = 1), " MAF above the protection elevation) <br/>",
           "<b>Current Elevation: </b>", current_elevation, " ft<br/>",
           "<b>Current Date: </b>", format(projection_date, "%B %d")
           ))
@@ -369,6 +401,10 @@ total_inflow = sapply(seq_len(nrow(all_date_ranges)), function(i) {
       
       con_use_per_period[seq_len(periods_revealed)] <- 
         ub_use()[seq_len(periods_revealed) + 1]
+      
+      con_use_per_period <- round(as.numeric(con_use_per_period), digits = 2)
+      con_use_per_period[is.na(con_use_per_period)] <- ""
+      
       #}
       
    inflow_per_period <- round(as.numeric(inflow_per_period) / 1000000, digits = 2)
@@ -380,7 +416,7 @@ total_inflow = sapply(seq_len(nrow(all_date_ranges)), function(i) {
       'Release (MAF)' = release_per_period,
       'Additional Flow (MAF)' = add_flow_per_period,
       'Unregulated Inflow (MAF)' = inflow_per_period,
-      'Consumptive Use (MAF)' = round(as.numeric(con_use_per_period), digits = 2)
+      'Consumptive Use (MAF)' = con_use_per_period
     )
     })
     
@@ -451,6 +487,13 @@ start_description <-
               )
     )
 
+output$intro_block<- renderUI(HTML("Welcome! You are in charge of keeping Lake Powell above the elevation where it can no longer generate and deliver hydropower to 9 western U.S. states from Nebraska to Nevada.<br/><br/>
+
+There will be 3 operational periods over the coming year: Oct 1 to Dec 31, Jan 1 to March 31, and April 1 to Sept. 30. At the beginning of each period, we will tell you the current Lake Powell storage and the volume above minimum power pool. You will decide how much to release from Lake Powell and additional water to bring down from Flaming Gorge, Navajo, and Mesa before you know the inflow for that period. At the end of each period, you will see the Powell inflow over the period and a plot of storage and elevation to date. We will let you know if Lake Powell dropped below its' protection or minimum power pool elevation.<br/><br/> 
+
+We do know that all of Reclamation’s ensembles agree that natural flow (not accounting for consumptive use) to Lake Powell can be as low as 5-6 MAF. This model also assumes all consumptive use of stream of Lake Powell occurs from April 1 to Sept. 30.<br/><br/>
+
+See below for further instructions and context. Otherwise, push the Start Game button to begin. Good Luck!"))
 
 # Can't have the same output in multiple places, so have to define two separate outputs
 instructions_content <- function(){
@@ -476,7 +519,9 @@ output$figure_description <- renderUI({HTML("This figure shows agreement for 22 
 From 2020 to 2024, the consumptive use upstream of Lake Powell ranged from 3.9 to 4.5 MAF. This consumptive use occurs during the summer.<br/><br/>
 In 2026, 1 MAF of water was released from Flaming Gorge to raise the elevation of Lake Powell. The Final EIS, published in 2026 by the Bureau of Reclamation (USBR) outlines a maximum of 1.2 MAF total potential releases from Flaming Gorge, Blue Mesa, and Navajo Reservoir.")})
 
-
+output$contact_info <- renderUI(HTML("Please email all questions or issues to: <br/>
+                                     Isabel Hinton - isabel.hinton@usu.edu <br/>
+                                     David Rosenberg - david.rosenberg@usu.edu <br/>"))
 
 
 }
@@ -485,13 +530,16 @@ In 2026, 1 MAF of water was released from Flaming Gorge to raise the elevation o
 
 ```{r ui, include=FALSE}
 ui <- fluidPage(
+  img(src = "images/clipboard-image-2026-09-04.png", height = "75px"),
+  uiOutput("intro_block"),
   actionButton("start_game_top", "Start Game"),
   uiOutput("instructions_main"),
-  actionButton("start_game_bottom", "Start Game"),
+  
   
   uiOutput("figure_title"),
   img(src = "images/LowestInflowFigure.png", height = "300px"),
   uiOutput("figure_description"),
+  actionButton("start_game_bottom", "Start Game"),
   
   sidebarLayout(
     
@@ -509,7 +557,8 @@ ui <- fluidPage(
   
   h3("Context: "),
   h3("Assumptions and Data Sources: "),
-  h3("Contact Information: ")
+  h3("Contact Information: "),
+  uiOutput("contact_info")
 )
 ```
 
